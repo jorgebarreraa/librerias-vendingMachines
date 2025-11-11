@@ -1,0 +1,109 @@
+package me.jessyan.lifecyclemodel.cache;
+
+import androidx.annotation.Nullable;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+
+/* loaded from: classes2.dex */
+public class LruCache<K, V> implements Cache<K, V> {
+    private final LinkedHashMap<K, V> cache = new LinkedHashMap<>(100, 0.75f, true);
+    private int currentSize = 0;
+    private final int initialMaxSize;
+    private int maxSize;
+
+    public LruCache(int i) {
+        this.initialMaxSize = i;
+        this.maxSize = i;
+    }
+
+    private void evict() {
+        trimToSize(this.maxSize);
+    }
+
+    @Override // me.jessyan.lifecyclemodel.cache.Cache
+    public void clear() {
+        trimToSize(0);
+    }
+
+    @Override // me.jessyan.lifecyclemodel.cache.Cache
+    public synchronized boolean containsKey(K k) {
+        return this.cache.containsKey(k);
+    }
+
+    @Override // me.jessyan.lifecyclemodel.cache.Cache
+    @Nullable
+    public synchronized V get(K k) {
+        return this.cache.get(k);
+    }
+
+    protected int getItemSize(V v) {
+        return 1;
+    }
+
+    @Override // me.jessyan.lifecyclemodel.cache.Cache
+    public synchronized int getMaxSize() {
+        return this.maxSize;
+    }
+
+    @Override // me.jessyan.lifecyclemodel.cache.Cache
+    public Set<K> keySet() {
+        return this.cache.keySet();
+    }
+
+    protected void onItemEvicted(K k, V v) {
+    }
+
+    @Override // me.jessyan.lifecyclemodel.cache.Cache
+    @Nullable
+    public synchronized V put(K k, V v) {
+        if (getItemSize(v) >= this.maxSize) {
+            onItemEvicted(k, v);
+            return null;
+        }
+        V put = this.cache.put(k, v);
+        if (v != null) {
+            this.currentSize += getItemSize(v);
+        }
+        if (put != null) {
+            this.currentSize -= getItemSize(put);
+        }
+        evict();
+        return put;
+    }
+
+    @Override // me.jessyan.lifecyclemodel.cache.Cache
+    @Nullable
+    public synchronized V remove(K k) {
+        V remove;
+        remove = this.cache.remove(k);
+        if (remove != null) {
+            this.currentSize -= getItemSize(remove);
+        }
+        return remove;
+    }
+
+    public synchronized void setSizeMultiplier(float f) {
+        if (f < 0.0f) {
+            throw new IllegalArgumentException("Multiplier must be >= 0");
+        }
+        this.maxSize = Math.round(this.initialMaxSize * f);
+        evict();
+    }
+
+    @Override // me.jessyan.lifecyclemodel.cache.Cache
+    public synchronized int size() {
+        return this.currentSize;
+    }
+
+    protected synchronized void trimToSize(int i) {
+        while (this.currentSize > i) {
+            Map.Entry<K, V> next = this.cache.entrySet().iterator().next();
+            V value = next.getValue();
+            this.currentSize -= getItemSize(value);
+            K key = next.getKey();
+            this.cache.remove(key);
+            onItemEvicted(key, value);
+        }
+    }
+}
